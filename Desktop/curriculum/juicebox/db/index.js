@@ -1,6 +1,8 @@
 const { Client } = require("pg"); // imports the pg module
 
-const client = new Client("postgres://localhost:5432/juicebox-dev");
+const client = new Client(
+  process.env.DATABASE_URL || "postgres://localhost:5432/juicebox-dev"
+);
 
 /**
  * USER Methods
@@ -95,12 +97,7 @@ async function getUserById(userId) {
  * POST Methods
  */
 
-async function createPost({
-  authorId,
-  title,
-  content,
-  tags = [], // this is new
-}) {
+async function createPost({ authorId, title, content, tags = [] }) {
   try {
     const {
       rows: [post],
@@ -274,20 +271,27 @@ async function getPostById(postId) {
       rows: [post],
     } = await client.query(
       `
-        SELECT *
-        FROM posts
-        WHERE id=$1;
-      `,
+      SELECT *
+      FROM posts
+      WHERE id=$1;
+    `,
       [postId]
     );
 
+    if (!post) {
+      throw {
+        name: "PostNotFoundError",
+        message: "Could not find a post with that postId",
+      };
+    }
+
     const { rows: tags } = await client.query(
       `
-        SELECT tags.*
-        FROM tags
-        JOIN post_tags ON tags.id=post_tags."tagId"
-        WHERE post_tags."postId"=$1;
-      `,
+      SELECT tags.*
+      FROM tags
+      JOIN post_tags ON tags.id=post_tags."tagId"
+      WHERE post_tags."postId"=$1;
+    `,
       [postId]
     );
 
@@ -295,10 +299,10 @@ async function getPostById(postId) {
       rows: [author],
     } = await client.query(
       `
-        SELECT id, username, name, location
-        FROM users
-        WHERE id=$1;
-      `,
+      SELECT id, username, name, location
+      FROM users
+      WHERE id=$1;
+    `,
       [post.authorId]
     );
 
@@ -332,6 +336,27 @@ async function getPostsByTagName(tagName) {
   }
 }
 
+// db/index.js
+
+async function getUserByUsername(username) {
+  try {
+    const {
+      rows: [user],
+    } = await client.query(
+      `
+      SELECT *
+      FROM users
+      WHERE username=$1
+    `,
+      [username]
+    );
+
+    return user;
+  } catch (error) {
+    throw error;
+  }
+}
+
 module.exports = {
   client,
   createUser,
@@ -345,4 +370,6 @@ module.exports = {
   createTags,
   addTagsToPost,
   getPostsByTagName,
+  getUserByUsername,
+  getPostById,
 };
